@@ -46,4 +46,6 @@ export default class Items extends Component {
       </Center>
     )
   }
-}
+};
+
+export { ALL_ITEMS_QUERY };
