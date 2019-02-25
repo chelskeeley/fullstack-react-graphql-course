@@ -37,7 +37,7 @@ class Signin extends Component {
           <Form method="post" onSubmit={async e => {
             e.preventDefault();
             const res = await signup();
-            console.log(res);
+            // console.log(res);
             this.setState({
               email: "",
               password: ""
