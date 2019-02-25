@@ -1,5 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { randomBytes } = require("crypto");
+const { promisify } = require("util");
 
 const Mutations = {
   async createItem(parents, args, ctx, info) {
@@ -88,6 +90,62 @@ const Mutations = {
   signout(parent, args, ctx, info) {
     ctx.response.clearCookie("token");
     return { message: "Goodbye!" }
+  },
+  async requestReset(parent, args, ctx, info) {
+    // 1. Check if this is a real user
+    const user = await ctx.db.query.user({ where: { email: args.email } });
+    if (!user) {
+      throw new Error(`No such user found for email ${args.email}.`);
+    }
+    // 2. Set a reset token and expiry
+    const randomBytesPromisified = promisify(randomBytes);
+    const resetToken = (await randomBytesPromisified(20)).toString("hex");
+    const resetTokenExpiry = Date.now() + 3600000; // one hour from now
+    const res = await ctx.db.mutation.updateUser({
+      where: { email: args.email },
+      data: { resetToken, resetTokenExpiry }
+    })
+    console.log(res);
+    return { message: "Thanks" }
+    // 3. Email them the reset token
+  },
+  async resetPassword(parent, args, ctx, info) {
+    // 1. Check if the passwords match
+    if (args.password !== args.confirmPassword) {
+      throw new Error("Your passwords do not match.")
+    }
+    // 2. Check if its a legit reset Token
+    // 3. Check if its expired
+    // the _gte here comes from us querying "users" instead of "user". Check in prisma.graphql, under type Query, when we query users, when have access to input UserWhereInput, and if you look at that input, it gives us access to all manner of logic that allows us to check, in this case, if the resetTokenExpiry is gte, or greater than or equal to, the current time minus one hour
+    const [user] = await ctx.db.query.users({
+      where: {
+        resetToken: args.resetToken,
+        resetTokenExpiry_gte: Date.now() - 3600000,
+      }
+    })
+    if (!user) {
+      throw new Error("This token is either invalid or expired.")
+    }
+    // 4. Hash their new password
+    const password = await bcrypt.hash(args.password, 10);
+    // 5. Save the new password to the user and remove old reset token fields
+    const updatedUser = await ctx.db.mutation.updateUser({
+      where: { email: user.email },
+      data: {
+        password,
+        resetToken: null,
+        resetTokenExpiry: null
+      }
+    })
+    // 6. generate jwt
+    const token = jwt.sign({ userId: updatedUser.id }, process.env.APP_SECRET);
+    // 7. Set jwt cookie
+    ctx.response.cookie("token", token, {
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24 * 365 // 1 year cookie
+    })
+    // 8. Return the new user
+    return updatedUser;
   }
 };
 
