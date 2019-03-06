@@ -1,5 +1,5 @@
 import React, { Component } from "react";
-import { Query } from "react-apollo";
+import { Query, Mutation } from "react-apollo";
 import gql from "graphql-tag";
 import PropTypes from "prop-types";
 
@@ -14,6 +14,17 @@ const ALL_USERS_QUERY = gql`
       name
       email
       permissions
+    }
+  }
+`;
+
+const UPDATE_PERMISSIONS_MUTATION = gql`
+  mutation updatePermissions($permissions: [Permission], $userId: ID!) {
+    updatePermissions(permissions: $permissions, userId: $userId) {
+      id
+      permissions
+      name
+      email
     }
   }
 `;
@@ -82,6 +93,7 @@ class UserPermissions extends Component {
       updatedPermissions = updatedPermissions.filter(permission => permission !== checkbox.value);
     }
 
+    // if we passed the the updatePermissions function to this handler to call every time we check a checkbox, then we could pass it as a callback to setState, to ensure that state has been updated BEFORE we send the mutation to the BE with data from state!
     this.setState({
       permissions: updatedPermissions
     })
@@ -91,28 +103,39 @@ class UserPermissions extends Component {
     const user = this.props.user;
 
     return (
-      <tr>
-        <td>{user.name}</td>
-        <td>{user.email}</td>
-        {possiblePermissions.map(permission => (
-          <td key={`${permission}-permission-${permission}`}>
-            <label htmlFor={`${permission}-permission-${permission}`}>
-              <input
-                type="checkbox"
-                checked={this.state.permissions.includes(permission)}
-                value={permission}
-                onChange={this.handlePermissionChange}
-                id={`${permission}-permission-${permission}`}
-              />
-            </label>
-          </td>
-        ))}
-        <td>
-          <SickButton>
-            Update
-          </SickButton>
-        </td>
-      </tr>
+      <Mutation mutation={UPDATE_PERMISSIONS_MUTATION} variables={{
+        permissions: this.state.permissions,
+        userId: user.id
+      }}>
+        {(updatePermissions, { loading, error }) => (
+          <>
+            {error && <tr><td colSpan="8"><Error error={error} /></td></tr>}
+            <tr>
+              <td>{user.name}</td>
+              <td>{user.email}</td>
+              {possiblePermissions.map(permission => (
+                <td key={`${permission}-permission-${permission}`}>
+                  <label htmlFor={`${permission}-permission-${permission}`}>
+                    <input
+                      type="checkbox"
+                      checked={this.state.permissions.includes(permission)}
+                      value={permission}
+                      onChange={this.handlePermissionChange}
+                      id={`${permission}-permission-${permission}`}
+                    />
+                  </label>
+                </td>
+              ))}
+              <td>
+                {/* could pass the updatePermissions function from Mutation to the onClick handler, and trigger the mutation to the BE whenever you click a checkbo */}
+                <SickButton type="button" disabled={loading} onClick={updatePermissions}>
+                  Updat{loading ? "ing" : "e"}
+                </SickButton>
+              </td>
+            </tr>
+          </>
+        )}
+      </Mutation>
     )
   }
 }

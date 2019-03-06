@@ -17,7 +17,7 @@ const Table = styled.table`
       border-right: none;
       width: 150px;
       button {
-        width: 100%;
+        width: 100%; 
       }
     }
     label {
